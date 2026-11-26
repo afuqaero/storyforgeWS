@@ -19,7 +19,7 @@ git commit -m "feat: publish complete StoryForge v3.1 backend and PWA"
 git push origin main
 ```
 
-When Windows asks to overwrite README.md, choose **No** or skip that file if you want to preserve the ADHD-friendly GitHub README; the app does not require the existing README to execute.
+The command deliberately **skips README.md** to preserve the ADHD-friendly GitHub README.
 
 The `public/` directory in the ZIP contains the live local PWA. The `docs/site/` directory in the repo contains the static GitHub Pages preview. Keep both.
 
