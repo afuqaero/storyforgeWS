@@ -8,5 +8,5 @@ try {
  await page.waitForFunction(()=>typeof window.__storyforgeFilterCheck==='function',{timeout:10000});
  const result=await page.evaluate(()=>window.__storyforgeFilterCheck());
  console.log('FFMPEG_HDR_CAPABILITIES='+JSON.stringify(result));
- if(!result.zscale || !result.tonemap)process.exitCode=1;
+ if(!result.zscale || !result.tonemap || result.testExitCode!==0 || !(result.outputBytes>0))process.exitCode=1;
 }finally{await browser.close();}
