@@ -9,16 +9,17 @@ root.innerHTML = `
 <h1>Convert on the web.<br><span>Keep your footage private.</span></h1>
 <p class="subtitle">Prepare 1080 × 1920 WhatsApp Status clips directly in your browser. Nothing is uploaded to a server. No localhost, Tailscale, or Cloudflare Tunnel required.</p>
 <div class="shell">
-<label id="drop" class="drop" tabindex="0"><input id="video" type="file" accept="video/*,.mov,.mp4" /><div style="font-size:34px">📁</div><strong id="filelabel">Choose your original video</strong><small>MP4 / MOV • For best results use a short, SDR video</small></label>
+<label id="drop" class="drop" tabindex="0"><input id="video" type="file" accept="video/*,.mov,.mp4" /><div style="font-size:34px">📁</div><strong id="filelabel">Choose your original video</strong><small>MP4 / MOV • iPhone HDR/HLG supported where browser memory allows</small></label>
 <div class="controls"><label class="field">Frame rate<select id="fps"><option value="60">60 FPS · smooth motion</option><option value="30">29.97 FPS · smaller / faster</option></select><span class="hint">60 FPS uses H.264 High Level 4.2. Lower-frame-rate sources cannot gain real motion detail.</span></label>
 <label class="field">Quality mode<select id="quality"><option value="status">Status-ready · 8.2 Mbps, up to 30s clips</option><option value="detail">High quality · CRF 20 (larger files)</option></select><span class="hint">Status mode retries at lower bitrates when output clips exceed the 31.5 MB safety target.</span></label></div>
-<div class="notice" id="warning">⚠️ Browser FFmpeg is more limited and slower than desktop FFmpeg. HDR/HLG/Dolby Vision input requires verified tone mapping; this browser build will reject detected HDR rather than silently produce incorrect colours. For HDR, use the full local StoryForge converter.</div>
+<div class="notice" id="warning">🎨 iPhone HDR/HLG/PQ input: StoryForge detects transfer metadata and uses the Hable tone-mapping pipeline to create BT.709 SDR. Browser processing can be slow or run out of memory on long 60 FPS recordings. Test short clips first.</div>
 <div class="actions"><button class="btn" id="convert">Convert video</button><button class="btn outline" id="cancel" disabled>Cancel</button></div>
 <div class="progress"><div class="bar" id="bar"></div></div><div class="status" id="status" role="status" aria-live="polite">Ready. The browser loads its FFmpeg engine on first conversion (about 30 MB, hosted with StoryForge).</div>
 <div id="results" class="results"></div>
 </div><div class="foot">🔒 Video is processed in your browser's memory. It is never uploaded to StoryForge or GitHub. <br>📱 On mobile, tap Download or Share, then choose WhatsApp → Message yourself and enable HD if WhatsApp offers it. The browser cannot force WhatsApp HD or select your recipient.<br>💡 iPhone Safari and low-memory phones may struggle with large videos. WhatsApp may recompress Status posts.</div></div>`;
 const $ = id => document.getElementById(id);
-let ffmpeg, currentFile, running=false, outputUrls=[], detectedHdr=false, stopped=false;
+let ffmpeg, currentFile, running=false, outputUrls=[], stopped=false;
+let probeLogs=[];
 const status = s => $('status').textContent=s;
 const bar = p => $('bar').style.width=Math.max(0,Math.min(100,Math.round(p)))+'%';
 const bytes = n => (n/1e6).toFixed(2)+' MB';
@@ -42,7 +43,7 @@ function addResult(blob,name,index,total){
 async function engine(){
  if(ffmpeg?.loaded)return ffmpeg;
  status('Loading FFmpeg WebAssembly… first load can take a while.');
- const inst=new FFmpeg();inst.on('log',({message})=>{if(/arib-std-b67|smpte2084|bt2020/i.test(message))detectedHdr=true});
+ const inst=new FFmpeg();inst.on('log',({message})=>{if(probeLogs.length<2000)probeLogs.push(message)});
  inst.on('progress',({progress})=>{if(running&&Number.isFinite(progress))bar(Math.min(93, Math.max(0,progress*65)))});
  const base=import.meta.env.BASE_URL+'ffmpeg';
  await inst.load({coreURL:base+'/ffmpeg-core.js',wasmURL:base+'/ffmpeg-core.wasm'});
@@ -50,7 +51,24 @@ async function engine(){
 }
 function probeDuration(file){return new Promise(resolve=>{const el=document.createElement('video');el.preload='metadata';el.muted=true;const url=URL.createObjectURL(file);el.onloadedmetadata=()=>{let duration=el.duration;URL.revokeObjectURL(url);resolve(duration)};el.onerror=()=>{URL.revokeObjectURL(url);resolve(NaN)};el.src=url})}
 async function exec(args){const r=await ffmpeg.exec(args);if(r!==0)throw Error('FFmpeg exited with code '+r)}
-function vf(){return 'scale=1080:1920:force_original_aspect_ratio=decrease:flags=lanczos,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p'}
+const fullFrame='scale=1080:1920:force_original_aspect_ratio=decrease:flags=lanczos,pad=1080:1920:(ow-iw)/2:(oh-ih)/2';
+const hdrToSdr='zscale=transfer=linear:npl=100,format=gbrpf32le,tonemap=tonemap=hable:desat=0,zscale=primaries=bt709:transfer=bt709:matrix=bt709:range=limited,format=yuv420p';
+function vf(hdr){return (hdr ? hdrToSdr+',' : '')+fullFrame+',format=yuv420p'}
+function detectHdr(log){
+  // iPhone Dolby Vision profile 8.4 uses the HLG-compatible base layer.
+  // Require HDR transfer signalling rather than guessing from .mov or HEVC.
+  const transfer=/arib-std-b67|smpte2084|smpte-2084|\bhlg\b|\bpq\b/i;
+  const hdr=log.split('\n').some(line=>/video:|Stream #|color_|side data|DOVI|Dolby Vision/i.test(line)&&transfer.test(line));
+  return {hdr, transfer:hdr?(log.match(transfer)||[])[0]:'SDR/unknown'};
+}
+async function verifyHdrFilters(f) {
+  probeLogs=[];
+  await f.exec(['-hide_banner','-filters']);
+  const listing=probeLogs.join('\n');
+  if(!/\bzscale\b/.test(listing)||!/\btonemap\b/.test(listing))
+    throw Error('This browser FFmpeg engine lacks zscale/tonemap, so it cannot safely convert iPhone HDR. Use StoryForge Desktop for this video.');
+}
+
 async function convertAll(){
  if(!currentFile||running){if(!currentFile)status('Choose a video first.');return}
  running=true;stopped=false;$('convert').disabled=true;$('cancel').disabled=false;$('results').replaceChildren();outputUrls.forEach(u=>URL.revokeObjectURL(u));outputUrls=[];
@@ -59,12 +77,21 @@ async function convertAll(){
    if(!Number.isFinite(duration)||duration<=0)throw Error('Could not read video duration. Try an MP4 file.');
    if(currentFile.size>350*1024*1024)throw Error('For browser safety, please use a video smaller than 350 MiB, or use the desktop version.');
    if(duration>180)throw Error('This browser build currently limits videos to 3 minutes to avoid memory crashes.');
-   const f=await engine();detectedHdr=false;
+   const f=await engine();
    status('Loading video into browser memory…');
    const name='input'+(currentFile.name.toLowerCase().endsWith('.mov')?'.mov':'.mp4');await f.writeFile(name,await fetchFile(currentFile));
    status('Checking source video properties…');
+   probeLogs=[];
    await f.exec(['-hide_banner','-i',name]);
-   if(detectedHdr)throw Error('HDR/HLG/PQ detected. This browser build cannot safely tone-map HDR to SDR. Use local StoryForge for HDR clips.');
+   const sourceInfo=probeLogs.join('\n');
+   const {hdr,transfer}=detectHdr(sourceInfo);
+   if(hdr) {
+     status('iPhone HDR detected ('+transfer+'). Checking tone-mapping filters…');
+     await verifyHdrFilters(f);
+     status('HDR confirmed. Hable tone mapping will convert highlights to BT.709 SDR.');
+   } else if (/bt2020|bt\.2020/i.test(sourceInfo)) {
+     throw Error('BT.2020 source detected without recognizable HLG/PQ transfer. Refusing unsafe colour conversion. Try the desktop edition.');
+   }
    const count=Math.ceil(duration/30), fps=$('fps').value==='60'?'60':'30000/1001', quality=$('quality').value, ladder=quality==='status'?[8200,8000,7800,7600,7400]:[null];
    const audio=['-c:a','aac','-b:a','128k','-ar','44100','-ac','2'];
    let files=[];
@@ -73,9 +100,9 @@ async function convertAll(){
      for(let i=0;i<count;i++){
        if(stopped)throw Error('Conversion cancelled.');
        const start=i*30, len=Math.min(30,duration-start), dest='clip_'+i+'.mp4';
-       const v=['-c:v','libx264','-preset','ultrafast','-profile:v','high','-level:v',fps==='60'?'4.2':'4.0','-pix_fmt','yuv420p','-r',fps,'-vf',vf(),'-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-color_range','tv'];
+       const v=['-c:v','libx264','-preset','ultrafast','-profile:v','high','-level:v',fps==='60'?'4.2':'4.0','-pix_fmt','yuv420p','-r',fps,'-vf',vf(hdr),'-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-color_range','tv'];
        const rateArgs=rate===null?['-crf','20']:['-b:v',rate+'k','-maxrate','9500k','-bufsize','19000k'];
-       status('Encoding part '+(i+1)+' / '+count+(rate?' · '+rate+' kbps':' · CRF 20')+'…');
+       status((hdr?'HDR → SDR · ':'')+'Encoding part '+(i+1)+' / '+count+(rate?' · '+rate+' kbps':' · CRF 20')+'…');
        await exec(['-hide_banner','-y','-ss',String(start),'-t',String(len),'-i',name,'-map','0:v:0','-map','0:a:0?','-sn','-dn',...v,...rateArgs,...audio,'-movflags','+faststart','-map_metadata','-1','-fps_mode','cfr',dest]);
        const data=await f.readFile(dest);trial.push({name:dest,data});bar(5+90*(i+1)/count);
      }
