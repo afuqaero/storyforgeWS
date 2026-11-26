@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0c1221"><meta name="description" content="StoryForge WS: prepare 1080p 60 FPS videos for WhatsApp Status, locally with FFmpeg.">
+<title>StoryForge WS — Your Status, Sharper</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif}*{box-sizing:border-box}
+body{margin:0;background:#0b1020;color:#f8fafc;line-height:1.6}
+a{color:inherit;text-decoration:none}.wrap{max-width:1060px;margin:auto;padding:0 25px}
+header{display:flex;justify-content:space-between;align-items:center;padding:22px 0;gap:12px}.brand{font-size:21px;font-weight:850;letter-spacing:-.05em}.brand em{color:#7dd3fc;font-style:normal}
+.link{padding:10px 16px;border:1px solid #40516a;border-radius:999px;font-size:14px}
+.hero{padding:95px 0 60px;text-align:center}.eyebrow{color:#7dd3fc;font-size:13px;text-transform:uppercase;letter-spacing:.16em;font-weight:800}
+h1{font-size:clamp(43px,7vw,80px);letter-spacing:-.075em;line-height:1.08;margin:17px 0}h1 span{background:linear-gradient(90deg,#65d9ff,#a5b4fc,#e9b4ff);color:transparent;background-clip:text}
+.lead{font-size:clamp(16px,2vw,21px);color:#aebcd2;max-width:730px;margin:0 auto 32px}
+.actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}.btn{background:#89d7ff;color:#081321;border-radius:14px;padding:14px 21px;font-weight:800}.btn.secondary{background:#1c263c;color:#f7fbff;border:1px solid #354765}
+.preview{max-width:840px;margin:60px auto 0;padding:22px;border:1px solid #34445c;border-radius:24px;background:linear-gradient(140deg,#18223a,#101729);box-shadow:0 30px 100px #0007;text-align:left}
+.window{display:flex;gap:7px;margin-bottom:24px}.dot{width:10px;height:10px;border-radius:100%;background:#607187}
+.flow{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.step{background:#111a2d;border:1px solid #2b3950;border-radius:16px;padding:20px}.step strong{display:block;font-size:21px;margin-bottom:4px}.step span{color:#98abc3;font-size:14px}
+section{padding:55px 0}h2{font-size:clamp(26px,4vw,42px);letter-spacing:-.045em;margin:0 0 12px}p.muted{color:#9aacc4;max-width:650px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:27px}.card{border:1px solid #28364d;background:#131c2e;border-radius:18px;padding:23px}.card h3{margin:8px 0}.card p{margin:0;color:#a9b9cd;font-size:15px}
+.notice{background:#111d30;border-left:3px solid #7dd3fc;border-radius:12px;padding:20px 24px;color:#c7d5e8;margin-top:22px}code{background:#202e46;border-radius:5px;padding:2px 5px}
+footer{border-top:1px solid #27354b;padding:30px 0;color:#8ea1ba;font-size:14px}
+@media(max-width:680px){.flow,.grid{grid-template-columns:1fr}.hero{padding-top:55px}.preview{margin-top:40px;padding:14px}.step{padding:15px}header .link{font-size:12px}}
+</style></head>
+<body><div class="wrap"><header><a href="#top" class="brand">🎬 StoryForge<em>WS</em></a><a class="link" href="https://github.com/afuqaero/storyforgeWS">View on GitHub ↗</a></header>
+<main id="top"><div class="hero"><div class="eyebrow">Local-first • FFmpeg • WhatsApp Status</div><h1>Your video.<br><span>Better prepared.</span></h1><p class="lead">Turn original MOV and MP4 footage into 1080 × 1920, 60 FPS Status-ready clips—without paying for cloud video processing.</p>
+<div class="actions"><a class="btn" href="https://github.com/afuqaero/storyforgeWS">Explore project ↗</a><a class="btn secondary" href="#how">How it works ↓</a></div>
+<div class="preview"><div class="window"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div><div class="flow"><div class="step"><strong>01 📁</strong>Choose footage<span>Original MOV / MP4</span></div><div class="step"><strong>02 🎞️</strong>Convert locally<span>60 FPS • H.264 • BT.709</span></div><div class="step"><strong>03 📲</strong>Share clips<span>30-second parts for Status</span></div></div></div></div>
+<section id="how"><h2>Simple to use. Thoughtful under the hood.</h2><p class="muted">One job: prepare your video for WhatsApp without the confusing export menus.</p>
+<div class="grid"><div class="card"><div>🎨</div><h3>HDR → SDR</h3><p>HLG/PQ footage gets real tone mapping instead of incorrectly relabelled colour metadata.</p></div><div class="card"><div>✂️</div><h3>Smart segments</h3><p>Auto, Manual, or Real-time splitting with a 30-second maximum per part.</p></div><div class="card"><div>✅</div><h3>Checked exports</h3><p>Target 31.5 MB per clip, verify codec, framerate, colour and duration.</p></div><div class="card"><div>🔒</div><h3>Local processing</h3><p>Node and FFmpeg run on your computer. Cloudflare Tunnel is optional for mobile access.</p></div><div class="card"><div>📦</div><h3>Easy downloads</h3><p>Get individual MP4s or a ZIP containing your segments.</p></div><div class="card"><div>📱</div><h3>PWA handoff</h3><p>Use the phone's share sheet, then select WhatsApp and your own chat manually.</p></div></div>
+<div class="notice"><strong>Important:</strong> This GitHub Pages site is a <strong>public overview</strong>, not a live video-conversion server. Run StoryForge on your PC at <code>http://localhost:3000</code>. WhatsApp may still recompress uploaded Status videos.</div></section>
+<section><h2>Start with localhost.</h2><p class="muted">Install Node.js 20+ and FFmpeg, launch <code>start-windows.cmd</code> from the project folder, and open <code>localhost:3000</code>. No Tailscale or Cloudflare is needed for PC use.</p><div class="actions" style="justify-content:flex-start"><a class="btn" href="https://github.com/afuqaero/storyforgeWS#-run-locally-the-real-converter">Read quick-start ↗</a></div></section></main>
+<footer>Built by feeqazmir · Independent of WhatsApp / Meta · Source and setup on <a href="https://github.com/afuqaero/storyforgeWS">GitHub ↗</a></footer></div></body></html>
