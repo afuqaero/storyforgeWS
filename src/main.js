@@ -1,5 +1,5 @@
 import './style.css';
-import { planParts, nextSegmentSeconds, allClipsSafe, SAFE_BYTES } from './export-planner.js';
+import { planParts, allClipsSafe } from './export-planner.js';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
@@ -100,48 +100,43 @@ async function convertAll(){
    }
    const fps=$('fps').value==='60'?'60':'30000/1001';
    const audio=['-c:a','aac','-b:a','128k','-ar','44100','-ac','2'];
-   // Desktop encodes offline in two passes and ffprobes every output.
-   // Browser WebAssembly is one-pass, so bound actual output bytes and retry
-   // the complete set, never publishing an oversized intermediate encode.
-   // One automatic quality-first preset for everyone: CRF 20.
-   // Never lower quality just to squeeze a 30-second segment into a file limit.
-   const steps=[null];
-   let segmentSeconds=30, files=[], complete=false;
-   for(let shortenAttempt=0;shortenAttempt<30 && !complete;shortenAttempt++){
-     let lastFailedBytes=0;
-     const clips=planParts(duration,segmentSeconds);
-     for(const rate of steps){
+   // Quality-first automatic mode.
+   // Try a 30-second CRF 20 export first. If it's too large, retry the
+   // complete set at a predictable average bitrate instead of repeatedly
+   // cutting to 5 seconds and failing. Keep the original input untouched.
+   let files=[], complete=false;
+   const profiles=[
+     {label:'High quality (CRF 20)',crf:20},
+     ...[8200,7800,7400,6600,5800].map(kbps=>({label:kbps+' kbps',kbps}))
+   ];
+   for (let seconds of [30,25,20,15,10,5]) {
+     if(complete)break;
+     const clips=planParts(duration,seconds);
+     for(const profile of profiles){
+       if(stopped)throw Error('Conversion cancelled.');
        const trial=[];
-       for(const clip of clips){
-         if(stopped)throw Error('Conversion cancelled.');
-         const dest='clip_'+clip.index+'.mp4';
-         const v=['-c:v','libx264','-preset','ultrafast','-profile:v','high','-level:v',fps==='60'?'4.2':'4.0','-pix_fmt','yuv420p','-r',fps,'-vf',vf(hdr),'-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-color_range','tv'];
-         const rateArgs=rate===null?['-crf','20']:['-b:v',rate+'k','-maxrate','9500k','-bufsize','19000k'];
-         status((hdr?'HDR → SDR · ':'')+'Encoding clip '+(clip.index+1)+' / '+clips.length+' at '+(rate===null?'CRF 20':rate+' kbps')+' ('+segmentSeconds+'s max)…');
-         await exec(['-hide_banner','-y','-ss',String(clip.start),'-t',String(clip.length),'-i',name,'-map','0:v:0','-map','0:a:0?','-sn','-dn',...v,...rateArgs,...audio,'-movflags','+faststart','-map_metadata','-1','-fps_mode','cfr',dest]);
-         const data=await f.readFile(dest);
-         trial.push({name:dest,data});
-         bar(10+Math.min(79,79*(clip.index+1)/clips.length));
+       try{
+         for(const clip of clips){
+           const dest='clip_'+clip.index+'.mp4';
+           const v=['-c:v','libx264','-preset','ultrafast','-profile:v','high','-level:v',fps==='60'?'4.2':'4.0','-pix_fmt','yuv420p','-r',fps,'-vf',vf(hdr),'-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-color_range','tv'];
+           const rateArgs=profile.crf!==undefined?['-crf',String(profile.crf)]:['-b:v',profile.kbps+'k','-maxrate','9500k','-bufsize','19000k'];
+           status((hdr?'HDR → SDR · ':'')+'Optimizing clip '+(clip.index+1)+'/'+clips.length+' · '+profile.label+' · '+seconds+'s max');
+           await exec(['-hide_banner','-y','-ss',String(clip.start),'-t',String(clip.length),'-i',name,'-map','0:v:0','-map','0:a:0?','-sn','-dn',...v,...rateArgs,...audio,'-movflags','+faststart','-map_metadata','-1','-fps_mode','cfr',dest]);
+           const data=await f.readFile(dest);
+           trial.push({name:dest,data});
+           bar(10+Math.min(79,79*(clip.index+1)/clips.length));
+         }
+         if(allClipsSafe(trial)){files=trial;complete=true;break}
+         const biggest=Math.max(...trial.map(item=>item.data.byteLength));
+         status('Output reached '+bytes(biggest)+', above 31.5 MB. Retrying with a smaller bitrate…');
+       }finally{
+         if(!complete){
+           for(const item of trial){try{await f.deleteFile(item.name)}catch{}}
+         }
        }
-       files=trial;
-       lastFailedBytes=Math.max(...trial.map(x=>x.data.byteLength));
-       if(allClipsSafe(trial)){complete=true;break}
-       status('Clip exceeded 31.5 MB. Retrying the whole set to preserve consistent encoding…');
-       // Remove all rejected output buffers before the next attempt.
-       for(const item of trial){await f.deleteFile(item.name).catch(()=>{})}
-       files=[];
-     }
-     if(!complete){
-       // Estimate the next safe clip duration based on the last rejected attempt.
-       // The next iteration always cuts from the original source, not a compressed copy.
-       const proposed=nextSegmentSeconds(segmentSeconds,Math.max(SAFE_BYTES+1,lastFailedBytes));
-       if(proposed>=segmentSeconds)throw Error('Could not find a safe segment duration.');
-       if(segmentSeconds<=5)throw Error('This source exceeds the 32 MB budget even at 5 seconds. Try 30 FPS or the desktop converter.');
-       segmentSeconds=proposed;
-       status('Reducing maximum clip duration to '+segmentSeconds+' seconds; retrying without dropping CRF quality.');
      }
    }
-   if(!complete || !allClipsSafe(files))throw Error('Unable to produce clips below 31.5 MB. Try 30 FPS or the desktop converter.');
+   if(!complete)throw Error('Could not fit the clips under 31.5 MB using safe presets. Try 30 FPS or StoryForge Desktop.');
    for(let i=0;i<files.length;i++)addResult(new Blob([files[i].data],{type:'video/mp4'}),'StoryForge_Part'+String(i+1).padStart(2,'0')+'of'+String(files.length).padStart(2,'0')+'.mp4',i+1,files.length);
    status('✅ Finished! '+files.length+' clip(s) optimized in your browser with automatic quality. Check them before posting to WhatsApp.');bar(100);
    try{await f.deleteFile(name);for(const x of files)await f.deleteFile(x.name)}catch{}
