@@ -16,6 +16,10 @@ StoryForge prepares your original iPhone/Android MOV or MP4 footage for WhatsApp
 
 **Important:** WhatsApp can recompress Status videos. This tool optimizes the file you upload; it cannot force WhatsApp to preserve the original quality.
 
+## 📌 Publication status
+
+The ADHD-friendly README and static Pages preview have been committed. The **complete v3.1 Node/FFmpeg source from the uploaded ZIP has not yet been pushed**. See [PUBLISH_SOURCE.md](PUBLISH_SOURCE.md) for the safe Windows upload steps. GitHub Pages also requires one-time activation in repository Settings → Pages → GitHub Actions before the website is live.
+
 ## 🖥️ Run locally (the real converter)
 
 The video engine needs a **Windows/macOS/Linux computer running Node.js and FFmpeg**. GitHub Pages cannot execute FFmpeg server processes.
@@ -65,7 +69,7 @@ Once converted, use your phone's Share Sheet → **WhatsApp → Message yourself
 
 ## 🌐 GitHub Pages
 
-[Open the StoryForge public overview](https://afuqaero.github.io/storyforgeWS/). This is a **static product overview, not the FFmpeg converter**.
+[StoryForge public overview](https://afuqaero.github.io/storyforgeWS/) — will become available **after GitHub Pages is enabled**. This is a **static product overview, not the FFmpeg converter**.
 
 ## 🔒 Privacy
 
