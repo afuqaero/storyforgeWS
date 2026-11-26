@@ -8,8 +8,8 @@
 
 1. 📁 Choose an **SDR or iPhone HDR/HLG/PQ** MP4 or MOV video.
 2. 🎞️ Choose **60 FPS** or **29.97 FPS**.
-3. 🧩 Select **Status-ready** (8.2 Mbps with size fallback) or **Higher quality** (CRF 20).
-4. ✂️ Convert into consecutive clips of **up to 30 seconds each**.
+3. ✨ Tap **Convert** — quality optimization is automatic. No bitrate or CRF menu.
+4. ✂️ StoryForge keeps clips at most 30 seconds, and makes shorter clips if necessary to meet the size limit.
 5. ⬇️ Download MP4 clips or 📲 share them with your phone's share sheet.
 
 No account. No video upload to StoryForge or GitHub. Browser FFmpeg runs on your device.
@@ -25,7 +25,7 @@ No account. No video upload to StoryForge or GitHub. Browser FFmpeg runs on your
 | 60 FPS or 29.97 FPS | ✅ |
 | H.264 / AAC MP4 | ✅ (depends on the included WebAssembly engine) |
 | Automatic 30-second parts | ✅ |
-| Status mode checks for 31.5 MB safety target | ✅ |
+| Automatic quality-first export checks for 31.5 MB per clip | ✅ |
 | Mobile share sheet | ✅ where the browser supports file sharing |
 | HDR / HLG / PQ tone mapping | ✅ **Hable HDR→SDR filter chain tested in Chromium**; real iPhone files remain device-dependent |
 | Dolby Vision metadata / enhancement layer | ⚠️ HLG/PQ-compatible base layer only; no proprietary DV enhancement processing |
@@ -36,11 +36,11 @@ No account. No video upload to StoryForge or GitHub. Browser FFmpeg runs on your
 
 ## 🛠️ How it works
 
-- **FFmpeg WebAssembly** loads from a CDN the first time you convert.
+- **FFmpeg WebAssembly** is hosted with the GitHub Pages website and loads on first conversion.
 - Your video is copied into browser memory, not uploaded.
 - Video is resized and padded to preserve the entire frame, then encoded with H.264.
-- Status-ready mode starts at **8,200 kb/s** and retries *all* parts together at **8,000 / 7,800 / 7,600 / 7,400 kb/s** if any part exceeds the 31.5 MB safety threshold.
-- Outputs are offered as individual MP4 downloads. Clips must remain below 32 MB in this mode.
+- **Automatic quality-first optimization** uses H.264 CRF 20, checks the encoded size, and retries with shorter segments if any part exceeds the 31.5 MB safety threshold. The browser encoder uses x264 ultrafast for performance, so it is not identical to the desktop two-pass encoder.
+- Outputs are offered as individual MP4 downloads. Clips must be under 32 MB. Very complex video may still fail due to browser limits.
 
 ## 🧠 Quick troubleshooting
 
