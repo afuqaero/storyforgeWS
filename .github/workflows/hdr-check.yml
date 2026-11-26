@@ -1,0 +1,21 @@
+name: Browser HDR capability check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - run: npm install --no-save playwright
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Start preview
+        run: npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/site.log 2>&1 &
+      - name: Check actual WebAssembly HDR filters
+        run: node tests/check-ffmpeg-browser.mjs
