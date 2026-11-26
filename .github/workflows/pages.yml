@@ -38,6 +38,8 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+      - name: Allow Pages artifact indexing
+        run: sleep 15
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
