@@ -1,4 +1,5 @@
 import './style.css';
+import { planParts, nextSegmentSeconds, allClipsSafe, SAFE_BYTES, STATUS_RATES } from './export-planner.js';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
@@ -11,7 +12,7 @@ root.innerHTML = `
 <div class="shell">
 <label id="drop" class="drop" tabindex="0"><input id="video" type="file" accept="video/*,.mov,.mp4" /><div style="font-size:34px">📁</div><strong id="filelabel">Choose your original video</strong><small>MP4 / MOV • iPhone HDR/HLG supported where browser memory allows</small></label>
 <div class="controls"><label class="field">Frame rate<select id="fps"><option value="60">60 FPS · smooth motion</option><option value="30">29.97 FPS · smaller / faster</option></select><span class="hint">60 FPS uses H.264 High Level 4.2. Lower-frame-rate sources cannot gain real motion detail.</span></label>
-<label class="field">Quality mode<select id="quality"><option value="status">Status-ready · 8.2 Mbps, up to 30s clips</option><option value="detail">High quality · CRF 20 (larger files)</option></select><span class="hint">Status mode retries at lower bitrates when output clips exceed the 31.5 MB safety target.</span></label></div>
+<label class="field">Quality mode<select id="quality"><option value="status">Status-ready · 8.2 Mbps, up to 30s clips</option><option value="detail">High quality · CRF 20 (auto-adjust clip length)</option></select><span class="hint">Status mode uses 8.2 → 7.4 Mbps; if needed, both modes shorten clips automatically to meet 31.5 MB.</span></label></div>
 <div class="notice" id="warning">🎨 iPhone HDR/HLG/PQ input: StoryForge detects transfer metadata and uses the Hable tone-mapping pipeline to create BT.709 SDR. Browser processing can be slow or run out of memory on long 60 FPS recordings. Test short clips first.</div>
 <div class="actions"><button class="btn" id="convert">Convert video</button><button class="btn outline" id="cancel" disabled>Cancel</button></div>
 <div class="progress"><div class="bar" id="bar"></div></div><div class="status" id="status" role="status" aria-live="polite">Ready. The browser loads its FFmpeg engine on first conversion (about 30 MB, hosted with StoryForge).</div>
@@ -97,27 +98,48 @@ async function convertAll(){
    } else if (/bt2020|bt\.2020/i.test(sourceInfo)) {
      throw Error('BT.2020 source detected without recognizable HLG/PQ transfer. Refusing unsafe colour conversion. Try the desktop edition.');
    }
-   const count=Math.ceil(duration/30), fps=$('fps').value==='60'?'60':'30000/1001', quality=$('quality').value, ladder=quality==='status'?[8200,8000,7800,7600,7400]:[null];
+   const fps=$('fps').value==='60'?'60':'30000/1001', quality=$('quality').value;
    const audio=['-c:a','aac','-b:a','128k','-ar','44100','-ac','2'];
-   let files=[];
-   for(const rate of ladder){
-     const trial=[];
-     for(let i=0;i<count;i++){
-       if(stopped)throw Error('Conversion cancelled.');
-       const start=i*30, len=Math.min(30,duration-start), dest='clip_'+i+'.mp4';
-       const v=['-c:v','libx264','-preset','ultrafast','-profile:v','high','-level:v',fps==='60'?'4.2':'4.0','-pix_fmt','yuv420p','-r',fps,'-vf',vf(hdr),'-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-color_range','tv'];
-       const rateArgs=rate===null?['-crf','20']:['-b:v',rate+'k','-maxrate','9500k','-bufsize','19000k'];
-       status((hdr?'HDR → SDR · ':'')+'Encoding part '+(i+1)+' / '+count+(rate?' · '+rate+' kbps':' · CRF 20')+'…');
-       await exec(['-hide_banner','-y','-ss',String(start),'-t',String(len),'-i',name,'-map','0:v:0','-map','0:a:0?','-sn','-dn',...v,...rateArgs,...audio,'-movflags','+faststart','-map_metadata','-1','-fps_mode','cfr',dest]);
-       const data=await f.readFile(dest);trial.push({name:dest,data});bar(5+90*(i+1)/count);
+   // Desktop encodes offline in two passes and ffprobes every output.
+   // Browser WebAssembly is one-pass, so bound actual output bytes and retry
+   // the complete set, never publishing an oversized intermediate encode.
+   const steps=quality==='status'?[...STATUS_RATES]:[null];
+   let segmentSeconds=30, files=[], complete=false;
+   for(let shortenAttempt=0;shortenAttempt<8 && !complete;shortenAttempt++){
+     let lastFailedBytes=0;
+     const clips=planParts(duration,segmentSeconds);
+     for(const rate of steps){
+       const trial=[];
+       for(const clip of clips){
+         if(stopped)throw Error('Conversion cancelled.');
+         const dest='clip_'+clip.index+'.mp4';
+         const v=['-c:v','libx264','-preset','ultrafast','-profile:v','high','-level:v',fps==='60'?'4.2':'4.0','-pix_fmt','yuv420p','-r',fps,'-vf',vf(hdr),'-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-color_range','tv'];
+         const rateArgs=rate===null?['-crf','20']:['-b:v',rate+'k','-maxrate','9500k','-bufsize','19000k'];
+         status((hdr?'HDR → SDR · ':'')+'Encoding clip '+(clip.index+1)+' / '+clips.length+' at '+(rate===null?'CRF 20':rate+' kbps')+' ('+segmentSeconds+'s max)…');
+         await exec(['-hide_banner','-y','-ss',String(clip.start),'-t',String(clip.length),'-i',name,'-map','0:v:0','-map','0:a:0?','-sn','-dn',...v,...rateArgs,...audio,'-movflags','+faststart','-map_metadata','-1','-fps_mode','cfr',dest]);
+         const data=await f.readFile(dest);
+         trial.push({name:dest,data});
+         bar(10+Math.min(79,79*(clip.index+1)/clips.length));
+       }
+       files=trial;
+       lastFailedBytes=Math.max(...trial.map(x=>x.data.byteLength));
+       if(allClipsSafe(trial)){complete=true;break}
+       status('Clip exceeded 31.5 MB. Retrying the whole set to preserve consistent encoding…');
+       // Remove all rejected output buffers before the next attempt.
+       for(const item of trial){await f.deleteFile(item.name).catch(()=>{})}
+       files=[];
      }
-     if(rate!==null&&trial.some(x=>x.data.byteLength>31500000)){
-       status('One clip exceeded 31.5 MB; retrying all clips at lower bitrate…');
-       files=trial;continue;
+     if(!complete){
+       // Estimate the next safe clip duration based on the last rejected attempt.
+       // The next iteration always cuts from the original source, not a compressed copy.
+       const proposed=nextSegmentSeconds(segmentSeconds,Math.max(SAFE_BYTES+1,lastFailedBytes));
+       if(proposed>=segmentSeconds)throw Error('Could not find a safe segment duration.');
+       if(segmentSeconds<=5)throw Error('This source exceeds the 32 MB budget even at 5 seconds. Try 30 FPS or the desktop converter.');
+       segmentSeconds=proposed;
+       status('Reducing maximum clip duration to '+segmentSeconds+' seconds; retrying without dropping CRF quality.');
      }
-     files=trial;break;
    }
-   if(files.some(x=>x.data.byteLength>=32000000))throw Error('Output exceeds 32 MB. Try 30 FPS or shorter segments.');
+   if(!complete || !allClipsSafe(files))throw Error('Unable to produce clips below 31.5 MB. Try 30 FPS or the desktop converter.');
    for(let i=0;i<files.length;i++)addResult(new Blob([files[i].data],{type:'video/mp4'}),'StoryForge_Part'+String(i+1).padStart(2,'0')+'of'+String(files.length).padStart(2,'0')+'.mp4',i+1,files.length);
    status('✅ Finished! '+files.length+' clip(s) processed locally. Preview outputs before posting.');bar(100);
    try{await f.deleteFile(name);for(const x of files)await f.deleteFile(x.name)}catch{}
