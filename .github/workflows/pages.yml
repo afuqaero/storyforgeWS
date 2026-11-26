@@ -1,4 +1,4 @@
-name: Deploy GitHub Pages preview
+name: Deploy StoryForge browser converter
 on:
   push:
     branches: [main]
@@ -17,16 +17,22 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install
+        run: npm install
+      - name: Build static converter
+        run: npm run build
       - name: Configure Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - name: Upload static overview
+      - name: Upload built site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./docs/site
+          path: dist
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
