@@ -1,5 +1,5 @@
 import './style.css';
-import { planParts, nextSegmentSeconds, allClipsSafe, SAFE_BYTES, STATUS_RATES } from './export-planner.js';
+import { planParts, nextSegmentSeconds, allClipsSafe, SAFE_BYTES } from './export-planner.js';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
@@ -11,8 +11,8 @@ root.innerHTML = `
 <p class="subtitle">Prepare 1080 × 1920 WhatsApp Status clips directly in your browser. Nothing is uploaded to a server. No localhost, Tailscale, or Cloudflare Tunnel required.</p>
 <div class="shell">
 <label id="drop" class="drop" tabindex="0"><input id="video" type="file" accept="video/*,.mov,.mp4" /><div style="font-size:34px">📁</div><strong id="filelabel">Choose your original video</strong><small>MP4 / MOV • iPhone HDR/HLG supported where browser memory allows</small></label>
-<div class="controls"><label class="field">Frame rate<select id="fps"><option value="60">60 FPS · smooth motion</option><option value="30">29.97 FPS · smaller / faster</option></select><span class="hint">60 FPS uses H.264 High Level 4.2. Lower-frame-rate sources cannot gain real motion detail.</span></label>
-<label class="field">Quality mode<select id="quality"><option value="status">Status-ready · 8.2 Mbps, up to 30s clips</option><option value="detail">High quality · CRF 20 (auto-adjust clip length)</option></select><span class="hint">Status mode uses 8.2 → 7.4 Mbps; if needed, both modes shorten clips automatically to meet 31.5 MB.</span></label></div>
+<div class="controls"><label class="field">Frame rate<select id="fps"><option value="60">60 FPS · smoother motion</option><option value="30">29.97 FPS · smaller and faster</option></select><span class="hint">Choose only motion smoothness. Everything else is optimized automatically.</span></label>
+<div class="auto-quality"><div class="auto-title">✨ Automatic quality optimization <span class="auto-check">Enabled ✓</span></div><p>StoryForge preserves detail, converts iPhone HDR to SDR when needed, and automatically splits clips to fit the output size target.</p><div class="auto-details"><span>1080 × 1920</span><span>H.264 · AAC</span><span>≤ 31.5 MB / clip</span></div></div></div>
 <div class="notice" id="warning">🎨 iPhone HDR/HLG/PQ input: StoryForge detects transfer metadata and uses the Hable tone-mapping pipeline to create BT.709 SDR. Browser processing can be slow or run out of memory on long 60 FPS recordings. Test short clips first.</div>
 <div class="actions"><button class="btn" id="convert">Convert video</button><button class="btn outline" id="cancel" disabled>Cancel</button></div>
 <div class="progress"><div class="bar" id="bar"></div></div><div class="status" id="status" role="status" aria-live="polite">Ready. The browser loads its FFmpeg engine on first conversion (about 30 MB, hosted with StoryForge).</div>
@@ -98,14 +98,16 @@ async function convertAll(){
    } else if (/bt2020|bt\.2020/i.test(sourceInfo)) {
      throw Error('BT.2020 source detected without recognizable HLG/PQ transfer. Refusing unsafe colour conversion. Try the desktop edition.');
    }
-   const fps=$('fps').value==='60'?'60':'30000/1001', quality=$('quality').value;
+   const fps=$('fps').value==='60'?'60':'30000/1001';
    const audio=['-c:a','aac','-b:a','128k','-ar','44100','-ac','2'];
    // Desktop encodes offline in two passes and ffprobes every output.
    // Browser WebAssembly is one-pass, so bound actual output bytes and retry
    // the complete set, never publishing an oversized intermediate encode.
-   const steps=quality==='status'?[...STATUS_RATES]:[null];
+   // One automatic quality-first preset for everyone: CRF 20.
+   // Never lower quality just to squeeze a 30-second segment into a file limit.
+   const steps=[null];
    let segmentSeconds=30, files=[], complete=false;
-   for(let shortenAttempt=0;shortenAttempt<8 && !complete;shortenAttempt++){
+   for(let shortenAttempt=0;shortenAttempt<30 && !complete;shortenAttempt++){
      let lastFailedBytes=0;
      const clips=planParts(duration,segmentSeconds);
      for(const rate of steps){
@@ -141,7 +143,7 @@ async function convertAll(){
    }
    if(!complete || !allClipsSafe(files))throw Error('Unable to produce clips below 31.5 MB. Try 30 FPS or the desktop converter.');
    for(let i=0;i<files.length;i++)addResult(new Blob([files[i].data],{type:'video/mp4'}),'StoryForge_Part'+String(i+1).padStart(2,'0')+'of'+String(files.length).padStart(2,'0')+'.mp4',i+1,files.length);
-   status('✅ Finished! '+files.length+' clip(s) processed locally. Preview outputs before posting.');bar(100);
+   status('✅ Finished! '+files.length+' clip(s) optimized in your browser with automatic quality. Check them before posting to WhatsApp.');bar(100);
    try{await f.deleteFile(name);for(const x of files)await f.deleteFile(x.name)}catch{}
  }catch(e){status('⚠️ '+(e?.message||String(e)));console.error(e)}
  finally{running=false;$('convert').disabled=false;$('cancel').disabled=true}
