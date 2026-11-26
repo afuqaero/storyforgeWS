@@ -121,3 +121,13 @@ async function convertAll(){
 }
 $('convert').addEventListener('click',convertAll);
 $('cancel').addEventListener('click',async()=>{stopped=true;status('Cancelling…');if(ffmpeg?.loaded){await ffmpeg.terminate();ffmpeg=null;}running=false;$('convert').disabled=false;$('cancel').disabled=true;status('Conversion cancelled. You can try again.')});
+
+if (new URLSearchParams(location.search).has('ffmpeg-diagnostic')) {
+  window.__storyforgeFilterCheck = async () => {
+    const f=await engine();
+    probeLogs=[];
+    await f.exec(['-hide_banner','-filters']);
+    const lines=probeLogs.join('\n');
+    return {zscale:/\bzscale\b/.test(lines),tonemap:/\btonemap\b/.test(lines),lines:lines.slice(0,2000)};
+  };
+}
