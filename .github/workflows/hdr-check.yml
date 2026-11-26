@@ -17,7 +17,7 @@ jobs:
       - run: npm install --no-save playwright
       - run: npx playwright install --with-deps chromium
       - name: Test export planning
-        run: node --test tests/export-planner.test.mjs
+        run: node --test tests/*.test.mjs
       - run: npm run build
       - name: Bundle FFmpeg runtime for browser test
         run: |
@@ -28,3 +28,7 @@ jobs:
         run: npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/site.log 2>&1 &
       - name: Check actual WebAssembly HDR filters
         run: node tests/check-ffmpeg-browser.mjs
+      - name: Install FFmpeg for download verification
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Verify 60-second browser conversion at 30 and 60 FPS
+        run: node tests/check-splitting-browser.mjs

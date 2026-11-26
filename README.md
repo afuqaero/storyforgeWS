@@ -7,9 +7,9 @@
 ## ⚡ 30-second overview
 
 1. 📁 Choose an **SDR or iPhone HDR/HLG/PQ** MP4 or MOV video.
-2. 🎞️ Choose **60 FPS** or **29.97 FPS**.
+2. 🎞️ Choose **60 FPS** or **30 FPS**.
 3. ✨ Tap **Convert** — quality optimization is automatic. No bitrate or CRF menu.
-4. ✂️ StoryForge keeps clips at most 30 seconds, and makes shorter clips if necessary to meet the size limit.
+4. ✂️ StoryForge keeps clips at most 30 seconds, with fixed consecutive boundaries. A 60-second video produces exactly two 30-second parts, each with its own download button.
 5. ⬇️ Download MP4 clips or 📲 share them with your phone's share sheet.
 
 No account. No video upload to StoryForge or GitHub. Browser FFmpeg runs on your device.
@@ -22,7 +22,7 @@ No account. No video upload to StoryForge or GitHub. Browser FFmpeg runs on your
 | No install / no localhost server | ✅ |
 | Video stays on your device | ✅ |
 | Portrait 1080 × 1920, aspect-preserving fit | ✅ |
-| 60 FPS or 29.97 FPS | ✅ |
+| 60 FPS or 30 FPS | ✅ |
 | H.264 / AAC MP4 | ✅ (depends on the included WebAssembly engine) |
 | Automatic 30-second parts | ✅ |
 | Automatic quality-first export checks for 31.5 MB per clip | ✅ |
@@ -39,7 +39,7 @@ No account. No video upload to StoryForge or GitHub. Browser FFmpeg runs on your
 - **FFmpeg WebAssembly** is hosted with the GitHub Pages website and loads on first conversion.
 - Your video is copied into browser memory, not uploaded.
 - Video is resized and padded to preserve the entire frame, then encoded with H.264.
-- **Automatic quality-first optimization** uses H.264 CRF 20, checks the encoded size, and retries with shorter segments if any part exceeds the 31.5 MB safety threshold. The browser encoder uses x264 ultrafast for performance, so it is not identical to the desktop two-pass encoder.
+- **Automatic quality-first optimization** uses H.264 CRF 20, checks the encoded size, and retries with lower bitrates while preserving the 30-second boundaries if any part exceeds the 31.5 MB safety threshold. The browser encoder uses x264 ultrafast for performance, so it is not identical to the desktop two-pass encoder.
 - Outputs are offered as individual MP4 downloads. Clips must be under 32 MB. Very complex video may still fail due to browser limits.
 
 ## 🧠 Quick troubleshooting

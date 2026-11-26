@@ -23,6 +23,8 @@ jobs:
           node-version: '22'
       - name: Install
         run: npm install
+      - name: Test duration and segmentation
+        run: node --test tests/*.test.mjs
       - name: Build static converter
         run: npm run build
       - name: Bundle FFmpeg core for reliable same-origin loading

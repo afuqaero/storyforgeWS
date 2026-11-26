@@ -1,5 +1,5 @@
 import './style.css';
-import { planParts, allClipsSafe } from './export-planner.js';
+import { planParts, allClipsSafe, resolveDuration, clipTimingArgs } from './export-planner.js';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
@@ -11,8 +11,8 @@ root.innerHTML = `
 <p class="subtitle">Prepare 1080 × 1920 WhatsApp Status clips directly in your browser. Nothing is uploaded to a server. No localhost, Tailscale, or Cloudflare Tunnel required.</p>
 <div class="shell">
 <label id="drop" class="drop" tabindex="0"><input id="video" type="file" accept="video/*,.mov,.mp4" /><div style="font-size:34px">📁</div><strong id="filelabel">Choose your original video</strong><small>MP4 / MOV • iPhone HDR/HLG supported where browser memory allows</small></label>
-<div class="controls"><label class="field">Frame rate<select id="fps"><option value="60">60 FPS · smoother motion</option><option value="30">29.97 FPS · smaller and faster</option></select><span class="hint">Choose only motion smoothness. Everything else is optimized automatically.</span></label>
-<div class="auto-quality"><div class="auto-title">✨ Automatic quality optimization <span class="auto-check">Enabled ✓</span></div><p>StoryForge preserves detail, converts iPhone HDR to SDR when needed, and automatically splits clips to fit the output size target.</p><div class="auto-details"><span>1080 × 1920</span><span>H.264 · AAC</span><span>≤ 31.5 MB / clip</span></div></div></div>
+<div class="controls"><label class="field">Frame rate<select id="fps"><option value="60">60 FPS · smoother motion</option><option value="30">30 FPS · smaller and faster</option></select><span class="hint">Choose only motion smoothness. Everything else is optimized automatically.</span></label>
+<div class="auto-quality"><div class="auto-title">✨ Automatic quality optimization <span class="auto-check">Enabled ✓</span></div><p>StoryForge preserves detail, converts iPhone HDR to SDR when needed, and automatically splits videos into consecutive parts of at most 30 seconds. A 60-second video becomes two 30-second downloads.</p><div class="auto-details"><span>1080 × 1920</span><span>H.264 · AAC</span><span>≤ 31.5 MB / clip</span><span>≤ 30 seconds / part</span></div></div></div>
 <div class="notice" id="warning">🎨 iPhone HDR/HLG/PQ input: StoryForge detects transfer metadata and uses the Hable tone-mapping pipeline to create BT.709 SDR. Browser processing can be slow or run out of memory on long 60 FPS recordings. Test short clips first.</div>
 <div class="actions"><button class="btn" id="convert">Convert video</button><button class="btn outline" id="cancel" disabled>Cancel</button></div>
 <div class="progress"><div class="bar" id="bar"></div></div><div class="status" id="status" role="status" aria-live="polite">Ready. The browser loads its FFmpeg engine on first conversion (about 30 MB, hosted with StoryForge).</div>
@@ -36,7 +36,7 @@ function addResult(blob,name,index,total){
   const row=document.createElement('div');row.className='result';
   const label=document.createElement('div');const strong=document.createElement('strong');strong.textContent=name;const sub=document.createElement('div');sub.className='small';sub.textContent=bytes(blob.size)+' · Part '+index+' of '+total;label.append(strong,sub);
   const links=document.createElement('div');links.className='actions';links.style.margin='0';
-  const download=document.createElement('a');download.href=url;download.download=name;download.textContent='⬇ Download';
+  const download=document.createElement('a');download.href=url;download.download=name;download.textContent='⬇ Download Part '+index;
   const share=document.createElement('button');share.className='btn outline';share.style.padding='9px 12px';share.textContent='Share';
   share.addEventListener('click',async()=>{const file=new File([blob],name,{type:'video/mp4'});try{if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],title:name});else {download.click();status('File saved. Open WhatsApp and attach it from your gallery.') }}catch(e){if(e.name!=='AbortError')status('Sharing was unavailable. Please download and share manually.')}});
   links.append(download,share);row.append(label,links);$('results').append(row);
@@ -76,7 +76,6 @@ async function convertAll(){
  try{
    let duration=await probeDuration(currentFile);
    if(currentFile.size>350*1024*1024)throw Error('For browser safety, please use a video smaller than 350 MiB, or use the desktop version.');
-   if(duration>180)throw Error('This browser build currently limits videos to 3 minutes to avoid memory crashes.');
    const f=await engine();
    status('Loading video into browser memory…');
    const name='input'+(currentFile.name.toLowerCase().endsWith('.mov')?'.mov':'.mp4');await f.writeFile(name,await fetchFile(currentFile));
@@ -84,11 +83,16 @@ async function convertAll(){
    probeLogs=[];
    await f.exec(['-hide_banner','-i',name]);
    const sourceInfo=probeLogs.join('\n');
-   if(!Number.isFinite(duration)||duration<=0){
-     const match=sourceInfo.match(/Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/);
-     if(match)duration=Number(match[1])*3600+Number(match[2])*60+Number(match[3]);
-   }
-   if(!Number.isFinite(duration)||duration<=0)throw Error('Could not determine video duration. This browser may lack support for the source codec. Try StoryForge Desktop.');
+   // Use the video stream's precise duration: audio padding can extend the container.
+   let videoDuration;
+   const probeFile='duration.json';
+   try {
+     await f.ffprobe(['-v','error','-select_streams','v:0','-show_entries','stream=duration','-of','json',name,'-o',probeFile]);
+     // This WASM build can retain the preceding input-only probe's exit code.
+     // Read the structured result rather than discarding valid duration data.
+     videoDuration=Number(JSON.parse(await f.readFile(probeFile,'utf8')).streams?.[0]?.duration);
+   } finally {try{await f.deleteFile(probeFile)}catch{}}
+   duration=resolveDuration(duration,sourceInfo,videoDuration);
 
    const {hdr,transfer}=detectHdr(sourceInfo);
    if(hdr) {
@@ -98,41 +102,38 @@ async function convertAll(){
    } else if (/bt2020|bt\.2020/i.test(sourceInfo)) {
      throw Error('BT.2020 source detected without recognizable HLG/PQ transfer. Refusing unsafe colour conversion. Try the desktop edition.');
    }
-   const fps=$('fps').value==='60'?'60':'30000/1001';
+   const fps=$('fps').value==='60'?'60':'30';
    const audio=['-c:a','aac','-b:a','128k','-ar','44100','-ac','2'];
    // Quality-first automatic mode.
    // Try a 30-second CRF 20 export first. If it's too large, retry the
-   // complete set at a predictable average bitrate instead of repeatedly
-   // cutting to 5 seconds and failing. Keep the original input untouched.
+   // complete set at a lower bitrate, keeping the same 30-second boundaries.
    let files=[], complete=false;
    const profiles=[
      {label:'High quality (CRF 20)',crf:20},
      ...[8200,7800,7400,6600,5800].map(kbps=>({label:kbps+' kbps',kbps}))
    ];
-   for (let seconds of [30,25,20,15,10,5]) {
-     if(complete)break;
-     const clips=planParts(duration,seconds);
-     for(const profile of profiles){
-       if(stopped)throw Error('Conversion cancelled.');
-       const trial=[];
-       try{
-         for(const clip of clips){
-           const dest='clip_'+clip.index+'.mp4';
-           const v=['-c:v','libx264','-preset','ultrafast','-profile:v','high','-level:v',fps==='60'?'4.2':'4.0','-pix_fmt','yuv420p','-r',fps,'-vf',vf(hdr),'-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-color_range','tv'];
-           const rateArgs=profile.crf!==undefined?['-crf',String(profile.crf)]:['-b:v',profile.kbps+'k','-maxrate','9500k','-bufsize','19000k'];
-           status((hdr?'HDR → SDR · ':'')+'Optimizing clip '+(clip.index+1)+'/'+clips.length+' · '+profile.label+' · '+seconds+'s max');
-           await exec(['-hide_banner','-y','-ss',String(clip.start),'-t',String(clip.length),'-i',name,'-map','0:v:0','-map','0:a:0?','-sn','-dn',...v,...rateArgs,...audio,'-movflags','+faststart','-map_metadata','-1','-fps_mode','cfr',dest]);
-           const data=await f.readFile(dest);
-           trial.push({name:dest,data});
-           bar(10+Math.min(79,79*(clip.index+1)/clips.length));
-         }
-         if(allClipsSafe(trial)){files=trial;complete=true;break}
-         const biggest=Math.max(...trial.map(item=>item.data.byteLength));
-         status('Output reached '+bytes(biggest)+', above 31.5 MB. Retrying with a smaller bitrate…');
-       }finally{
-         if(!complete){
-           for(const item of trial){try{await f.deleteFile(item.name)}catch{}}
-         }
+   const seconds=30;
+   const clips=planParts(duration);
+   for(const profile of profiles){
+     if(stopped)throw Error('Conversion cancelled.');
+     const trial=[];
+     try{
+       for(const clip of clips){
+         const dest='clip_'+clip.index+'.mp4';
+         const v=['-c:v','libx264','-preset','ultrafast','-profile:v','high','-level:v',fps==='60'?'4.2':'4.0','-pix_fmt','yuv420p','-r',fps,'-vf',vf(hdr)+',fps='+fps,'-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-color_range','tv'];
+         const rateArgs=profile.crf!==undefined?['-crf',String(profile.crf)]:['-b:v',profile.kbps+'k','-maxrate','9500k','-bufsize','19000k'];
+         status((hdr?'HDR → SDR · ':'')+'Optimizing clip '+(clip.index+1)+'/'+clips.length+' · '+profile.label+' · '+seconds+'s max');
+         await exec(['-hide_banner','-y','-ss',String(clip.start),'-i',name,'-map','0:v:0','-map','0:a:0?','-sn','-dn',...v,...rateArgs,...audio,...clipTimingArgs(clip),'-movflags','+faststart','-map_metadata','-1','-fps_mode','cfr',dest]);
+         const data=await f.readFile(dest);
+         trial.push({name:dest,data});
+         bar(10+Math.min(79,79*(clip.index+1)/clips.length));
+       }
+       if(allClipsSafe(trial)){files=trial;complete=true;break}
+       const biggest=Math.max(...trial.map(item=>item.data.byteLength));
+       status('Output reached '+bytes(biggest)+', above 31.5 MB. Retrying with a smaller bitrate…');
+     }finally{
+       if(!complete){
+         for(const item of trial){try{await f.deleteFile(item.name)}catch{}}
        }
      }
    }

@@ -13,13 +13,23 @@ export function planParts(duration, seconds = 30) {
     index, start: index * seconds, length: Math.min(seconds, duration - index * seconds)
   })).filter(p => p.length > 1e-4);
 }
-export function nextSegmentSeconds(current, measuredBytes) {
-  if (!Number.isFinite(measuredBytes) || measuredBytes <= 0) throw new Error('Invalid output size.');
-  if (measuredBytes <= SAFE_BYTES) return current;
-  // Use a 10% safety margin; shorter clips rather than lowering CRF/detail quality.
-  const proportional = Math.floor(current * SAFE_BYTES / measuredBytes * 0.9);
-  return Math.max(5, Math.min(current - 1, proportional));
-}
 export function allClipsSafe(clips) {
   return clips.length > 0 && clips.every(c => c.data.byteLength <= SAFE_BYTES && c.data.byteLength < HARD_BYTES);
+}
+
+// Prefer the decoder's container duration to stale or unsupported browser metadata.
+export function resolveDuration(browserDuration, sourceInfo, videoDuration) {
+  const match = sourceInfo.match(/Duration:\s*(\d+):(\d{2}):(\d{2}(?:\.\d+)?)/);
+  const duration = Number.isFinite(videoDuration) && videoDuration > 0 ? videoDuration
+    : match ? Number(match[1])*3600 + Number(match[2])*60 + Number(match[3]) : browserDuration;
+  if (!Number.isFinite(duration) || duration <= 0)
+    throw new Error('Could not determine video duration. Try another MP4 or the desktop converter.');
+  if (duration > 180) throw new Error('This browser build currently limits videos to 3 minutes to avoid memory crashes.');
+  return duration;
+}
+// Output-side duration also bounds frames produced by frame-rate conversion.
+export function clipTimingArgs(clip) {
+  if (!Number.isFinite(clip.length) || clip.length <= 0 || clip.length > 30)
+    throw new Error('Invalid output duration. Each part must be at most 30 seconds.');
+  return ['-t', String(clip.length)];
 }
