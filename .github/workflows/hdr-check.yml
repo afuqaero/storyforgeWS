@@ -16,6 +16,8 @@ jobs:
       - run: npm install
       - run: npm install --no-save playwright
       - run: npx playwright install --with-deps chromium
+      - name: Test export planning
+        run: node --test tests/export-planner.test.mjs
       - run: npm run build
       - name: Bundle FFmpeg runtime for browser test
         run: |
