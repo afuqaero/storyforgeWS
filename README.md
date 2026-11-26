@@ -6,7 +6,7 @@
 
 ## ⚡ 30-second overview
 
-1. 📁 Choose an **SDR** MP4 or MOV video.
+1. 📁 Choose an **SDR or iPhone HDR/HLG/PQ** MP4 or MOV video.
 2. 🎞️ Choose **60 FPS** or **29.97 FPS**.
 3. 🧩 Select **Status-ready** (8.2 Mbps with size fallback) or **Higher quality** (CRF 20).
 4. ✂️ Convert into consecutive clips of **up to 30 seconds each**.
@@ -27,7 +27,8 @@ No account. No video upload to StoryForge or GitHub. Browser FFmpeg runs on your
 | Automatic 30-second parts | ✅ |
 | Status mode checks for 31.5 MB safety target | ✅ |
 | Mobile share sheet | ✅ where the browser supports file sharing |
-| HDR / HLG / Dolby Vision tone mapping | ❌ **not supported in this browser build** |
+| HDR / HLG / PQ tone mapping | ✅ **Hable HDR→SDR filter chain tested in Chromium**; real iPhone files remain device-dependent |
+| Dolby Vision metadata / enhancement layer | ⚠️ HLG/PQ-compatible base layer only; no proprietary DV enhancement processing |
 | Two-pass ABR and desktop parity | ❌ browser version uses **one-pass** |
 | Runs well on all phones | ⚠️ no; browser RAM and speed vary |
 
@@ -47,11 +48,17 @@ No account. No video upload to StoryForge or GitHub. Browser FFmpeg runs on your
 
 **Why is it slow?** The FFmpeg WebAssembly engine runs inside the browser and is slower than native desktop FFmpeg.
 
-**Why is HDR rejected?** This browser engine does not include the verified HLG/PQ tone-mapping pipeline used by StoryForge Desktop. Rejecting HDR is safer than publishing wrongly tagged colours.
+**Does iPhone HDR work?** The HLG/PQ-to-BT.709 Hable pipeline passed a real Chromium WebAssembly conversion test. Try a short iPhone HDR MOV first. Some HEVC/Dolby Vision files may still fail due to browser memory, codec, or metadata limitations; the app refuses unsupported HDR signalling rather than mislabeling colours.
 
 **Does sharing automatically send to myself in HD?** No. Your phone's share sheet can open WhatsApp, but you'll select **Message yourself** and any **HD** option manually.
 
-**Why does the website need internet?** GitHub Pages supplies the website, and the FFmpeg engine is downloaded from a CDN. The video file itself is not uploaded.
+**Why does the website need internet?** GitHub Pages supplies both the website and the packaged FFmpeg WebAssembly engine. Your video file itself is not uploaded.
+
+## 🎨 iPhone HDR processing
+
+StoryForge inspects FFmpeg source logs for HLG (`arib-std-b67`) and PQ (`smpte2084`) transfer signalling. For recognised HDR, the encoder runs `zscale → floating-point RGB → Hable tonemap → BT.709 limited-range → yuv420p`, preserving the full portrait frame. This matches the colour-processing approach from the original local converter. It does **not** apply tone mapping to normal BT.709 SDR.
+
+**Verification:** A one-frame synthetic HLG-to-BT.709 x264 encode passed in headless Chromium using the packaged FFmpeg WebAssembly engine. This is not proof that all iPhone Dolby Vision files or full-length 60 FPS clips will process reliably; browser memory and HEVC decoding are still important constraints.
 
 ## 🧑‍💻 Run it yourself (optional)
 
