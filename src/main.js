@@ -1,6 +1,6 @@
 import './style.css';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 const root = document.querySelector('#app');
 root.innerHTML = `
@@ -46,7 +46,7 @@ async function engine(){
  const inst=new FFmpeg();inst.on('log',({message})=>{if(probeLogs.length<2000)probeLogs.push(message)});
  inst.on('progress',({progress})=>{if(running&&Number.isFinite(progress))bar(Math.min(93, Math.max(0,progress*65)))});
  const base=import.meta.env.BASE_URL+'ffmpeg';
- await inst.load({coreURL:base+'/ffmpeg-core.js',wasmURL:base+'/ffmpeg-core.wasm'});
+ await inst.load({coreURL:await toBlobURL(base+'/ffmpeg-core.js','text/javascript'),wasmURL:await toBlobURL(base+'/ffmpeg-core.wasm','application/wasm')});
  ffmpeg=inst;return inst;
 }
 function probeDuration(file){return new Promise(resolve=>{const el=document.createElement('video');el.preload='metadata';el.muted=true;const url=URL.createObjectURL(file);el.onloadedmetadata=()=>{let duration=el.duration;URL.revokeObjectURL(url);resolve(duration)};el.onerror=()=>{URL.revokeObjectURL(url);resolve(NaN)};el.src=url})}
