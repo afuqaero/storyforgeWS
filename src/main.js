@@ -73,8 +73,7 @@ async function convertAll(){
  if(!currentFile||running){if(!currentFile)status('Choose a video first.');return}
  running=true;stopped=false;$('convert').disabled=true;$('cancel').disabled=false;$('results').replaceChildren();outputUrls.forEach(u=>URL.revokeObjectURL(u));outputUrls=[];
  try{
-   const duration=await probeDuration(currentFile);
-   if(!Number.isFinite(duration)||duration<=0)throw Error('Could not read video duration. Try an MP4 file.');
+   let duration=await probeDuration(currentFile);
    if(currentFile.size>350*1024*1024)throw Error('For browser safety, please use a video smaller than 350 MiB, or use the desktop version.');
    if(duration>180)throw Error('This browser build currently limits videos to 3 minutes to avoid memory crashes.');
    const f=await engine();
@@ -84,6 +83,12 @@ async function convertAll(){
    probeLogs=[];
    await f.exec(['-hide_banner','-i',name]);
    const sourceInfo=probeLogs.join('\n');
+   if(!Number.isFinite(duration)||duration<=0){
+     const match=sourceInfo.match(/Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/);
+     if(match)duration=Number(match[1])*3600+Number(match[2])*60+Number(match[3]);
+   }
+   if(!Number.isFinite(duration)||duration<=0)throw Error('Could not determine video duration. This browser may lack support for the source codec. Try StoryForge Desktop.');
+
    const {hdr,transfer}=detectHdr(sourceInfo);
    if(hdr) {
      status('iPhone HDR detected ('+transfer+'). Checking tone-mapping filters…');
@@ -128,6 +133,14 @@ if (new URLSearchParams(location.search).has('ffmpeg-diagnostic')) {
     probeLogs=[];
     await f.exec(['-hide_banner','-filters']);
     const lines=probeLogs.join('\n');
-    return {zscale:/\bzscale\b/.test(lines),tonemap:/\btonemap\b/.test(lines),lines:lines.slice(0,2000)};
+    const result={zscale:/\bzscale\b/.test(lines),tonemap:/\btonemap\b/.test(lines),lines:lines.slice(0,2000)};
+    if(result.zscale&&result.tonemap){
+      probeLogs=[];
+      const testFilter='format=yuv420p10le,setparams=range=tv:color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc,'+hdrToSdr;
+      result.testExitCode=await f.exec(['-hide_banner','-f','lavfi','-i','testsrc2=size=64x64:rate=1:duration=1','-vf',testFilter,'-frames:v','1','-c:v','libx264','-pix_fmt','yuv420p','-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-f','mp4','diagnostic.mp4']);
+      result.testLog=probeLogs.slice(-20).join('\n');
+      if(result.testExitCode===0){const out=await f.readFile('diagnostic.mp4');result.outputBytes=out.byteLength;await f.deleteFile('diagnostic.mp4')}
+    }
+    return result;
   };
 }
