@@ -28,8 +28,8 @@ jobs:
       - name: Bundle FFmpeg core for reliable same-origin loading
         run: |
           mkdir -p dist/ffmpeg
-          cp node_modules/@ffmpeg/core/dist/umd/ffmpeg-core.js dist/ffmpeg/
-          cp node_modules/@ffmpeg/core/dist/umd/ffmpeg-core.wasm dist/ffmpeg/
+          cp node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.js dist/ffmpeg/
+          cp node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.wasm dist/ffmpeg/
           test -s dist/ffmpeg/ffmpeg-core.js
           test -s dist/ffmpeg/ffmpeg-core.wasm
       - name: Configure Pages
