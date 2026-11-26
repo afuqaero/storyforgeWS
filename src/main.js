@@ -14,7 +14,7 @@ root.innerHTML = `
 <label class="field">Quality mode<select id="quality"><option value="status">Status-ready · 8.2 Mbps, up to 30s clips</option><option value="detail">High quality · CRF 20 (larger files)</option></select><span class="hint">Status mode retries at lower bitrates when output clips exceed the 31.5 MB safety target.</span></label></div>
 <div class="notice" id="warning">⚠️ Browser FFmpeg is more limited and slower than desktop FFmpeg. HDR/HLG/Dolby Vision input requires verified tone mapping; this browser build will reject detected HDR rather than silently produce incorrect colours. For HDR, use the full local StoryForge converter.</div>
 <div class="actions"><button class="btn" id="convert">Convert video</button><button class="btn outline" id="cancel" disabled>Cancel</button></div>
-<div class="progress"><div class="bar" id="bar"></div></div><div class="status" id="status" role="status" aria-live="polite">Ready. The FFmpeg engine downloads on first conversion (about 30 MB).</div>
+<div class="progress"><div class="bar" id="bar"></div></div><div class="status" id="status" role="status" aria-live="polite">Ready. The browser loads its FFmpeg engine on first conversion (about 30 MB, hosted with StoryForge).</div>
 <div id="results" class="results"></div>
 </div><div class="foot">🔒 Video is processed in your browser's memory. It is never uploaded to StoryForge or GitHub. <br>📱 On mobile, tap Download or Share, then choose WhatsApp → Message yourself and enable HD if WhatsApp offers it. The browser cannot force WhatsApp HD or select your recipient.<br>💡 iPhone Safari and low-memory phones may struggle with large videos. WhatsApp may recompress Status posts.</div></div>`;
 const $ = id => document.getElementById(id);
