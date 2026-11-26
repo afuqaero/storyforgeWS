@@ -1,84 +1,73 @@
-# 🎬 StoryForge WS — WhatsApp Status Video Studio
+# 🎬 StoryForge WS — browser video converter
 
-> **Upload a video → convert on your PC → download Status-ready clips → share to WhatsApp.**
->
-> Built by **feeqazmir**. Local-first, no AI API, no cloud rendering.
+**Pick video → Convert in the browser → Download or Share. No localhost installation.**
 
-## ⚡ 30-second explanation
+🌐 **Open the website:** https://afuqaero.github.io/storyforgeWS/
 
-StoryForge prepares your original iPhone/Android MOV or MP4 footage for WhatsApp Status.
+## ⚡ 30-second overview
 
-1. 📁 Choose a video.
-2. 🎞️ StoryForge converts HDR to SDR where needed and prepares **1080 × 1920 / 60 FPS** H.264 MP4s.
-3. ✂️ Longer videos are split into clips of **up to 30 seconds**.
-4. ✅ Each clip is checked for compatibility, duration and size.
-5. 📲 Download or share the finished clips to WhatsApp yourself.
+1. 📁 Choose an **SDR** MP4 or MOV video.
+2. 🎞️ Choose **60 FPS** or **29.97 FPS**.
+3. 🧩 Select **Status-ready** (8.2 Mbps with size fallback) or **Higher quality** (CRF 20).
+4. ✂️ Convert into consecutive clips of **up to 30 seconds each**.
+5. ⬇️ Download MP4 clips or 📲 share them with your phone's share sheet.
 
-**Important:** WhatsApp can recompress Status videos. This tool optimizes the file you upload; it cannot force WhatsApp to preserve the original quality.
+No account. No video upload to StoryForge or GitHub. Browser FFmpeg runs on your device.
 
-## 📌 Publication status
+## ✨ Features at a glance
 
-The ADHD-friendly README and static Pages preview have been committed. The **complete v3.1 Node/FFmpeg source from the uploaded ZIP has not yet been pushed**. See [PUBLISH_SOURCE.md](PUBLISH_SOURCE.md) for the safe Windows upload steps. GitHub Pages also requires one-time activation in repository Settings → Pages → GitHub Actions before the website is live.
-
-## 🖥️ Run locally (the real converter)
-
-The video engine needs a **Windows/macOS/Linux computer running Node.js and FFmpeg**. GitHub Pages cannot execute FFmpeg server processes.
-
-1. Install **Node.js 20+** and FFmpeg with `libx264`, `zscale`, and `tonemap`.
-2. On Windows, install FFmpeg via `winget install --id Gyan.FFmpeg -e`.
-3. Extract the StoryForge v3.1 project, then run `start-windows.cmd`.
-4. Open **http://localhost:3000** and upload your video.
-
-No `npm install` is required for v3.1. The included `npm test` command uses Node's built-in test runner.
-
-## 🎯 Locked export profile
-
-| Setting | Value |
+| Feature | Browser edition |
 |---|---|
-| Resolution | **1080 × 1920**, aspect-preserving fit |
-| Frame rate | **60 FPS CFR** |
-| Video | H.264 High Level 4.2, 8-bit yuv420p |
-| Colour | SDR BT.709 limited; Hable HDR tone mapping when needed |
-| Audio | AAC stereo, 44.1 kHz, 128 kb/s |
-| Compression | Two-pass ABR/VBV for offline modes |
-| Target bitrate | 8,200 kb/s; deterministic 8,000 → 7,800 → 7,600 → 7,400 fallback |
-| Segments | ≤30 seconds, ≤31.5 MB safety target |
-| Metadata | Source location metadata removed |
+| Works on GitHub Pages | ✅ |
+| No install / no localhost server | ✅ |
+| Video stays on your device | ✅ |
+| Portrait 1080 × 1920, aspect-preserving fit | ✅ |
+| 60 FPS or 29.97 FPS | ✅ |
+| H.264 / AAC MP4 | ✅ (depends on the included WebAssembly engine) |
+| Automatic 30-second parts | ✅ |
+| Status mode checks for 31.5 MB safety target | ✅ |
+| Mobile share sheet | ✅ where the browser supports file sharing |
+| HDR / HLG / Dolby Vision tone mapping | ❌ **not supported in this browser build** |
+| Two-pass ABR and desktop parity | ❌ browser version uses **one-pass** |
+| Runs well on all phones | ⚠️ no; browser RAM and speed vary |
 
-## ✂️ Choose a split mode
+**Important:** A video being 1080p doesn't guarantee WhatsApp will preserve its quality. WhatsApp may re-encode uploaded Status videos. HD selection and recipient choice are controlled by WhatsApp, not by this website.
 
-- **Auto (recommended):** split into 30-second parts.
-- **Manual:** enter your own cut points, each part ≤30 seconds.
-- **Real-time:** encode segments sequentially, then validate the entire set before sharing.
+## 🛠️ How it works
 
-## 📱 Phone / PWA / Cloudflare
+- **FFmpeg WebAssembly** loads from a CDN the first time you convert.
+- Your video is copied into browser memory, not uploaded.
+- Video is resized and padded to preserve the entire frame, then encoded with H.264.
+- Status-ready mode starts at **8,200 kb/s** and retries *all* parts together at **8,000 / 7,800 / 7,600 / 7,400 kb/s** if any part exceeds the 31.5 MB safety threshold.
+- Outputs are offered as individual MP4 downloads. Clips must remain below 32 MB in this mode.
 
-The local FFmpeg engine stays on **your computer**. For access from your phone, you may optionally start a **Cloudflare Tunnel** pointed at `http://localhost:3000`. Use Cloudflare Access authentication before exposing personal videos. Quick Tunnel links are public to anyone who knows the URL.
+## 🧠 Quick troubleshooting
 
-Once converted, use your phone's Share Sheet → **WhatsApp → Message yourself** and select **HD manually** if WhatsApp offers the option. A website cannot force HD, pick your chat, or post a Status automatically.
+**My video won't process?** Start with a short SDR MP4 (under 30 seconds). Large videos can exhaust phone memory.
 
-## 🧠 Troubleshooting — quick answers
+**Why is it slow?** The FFmpeg WebAssembly engine runs inside the browser and is slower than native desktop FFmpeg.
 
-**“Engine offline”** → Open `http://localhost:3000/api/health` on the PC. Start the Windows launcher and wait for **[READY]**.
+**Why is HDR rejected?** This browser engine does not include the verified HLG/PQ tone-mapping pipeline used by StoryForge Desktop. Rejecting HDR is safer than publishing wrongly tagged colours.
 
-**FFmpeg missing** → Run `ffmpeg -version` and `ffprobe -version` in a new terminal.
+**Does sharing automatically send to myself in HD?** No. Your phone's share sheet can open WhatsApp, but you'll select **Message yourself** and any **HD** option manually.
 
-**Phone cannot use localhost** → Phone's localhost is not the PC. Use the private tunnel address.
+**Why does the website need internet?** GitHub Pages supplies the website, and the FFmpeg engine is downloaded from a CDN. The video file itself is not uploaded.
 
-**Videos look blurry on Status** → Compare the local exported MP4 first. WhatsApp can compress it again.
+## 🧑‍💻 Run it yourself (optional)
 
-## 🌐 GitHub Pages
+```bash
+npm install
+npm run dev
+```
 
-[StoryForge public overview](https://afuqaero.github.io/storyforgeWS/) — will become available **after GitHub Pages is enabled**. This is a **static product overview, not the FFmpeg converter**.
+Visit the local URL printed by Vite.
 
-## 🔒 Privacy
+## 🚀 Deploy
 
-Local conversions stay on your computer. If you use Cloudflare Tunnel from your phone, uploads/downloads travel through Cloudflare en route to your PC. No account or AI service is needed for FFmpeg encoding.
+A GitHub Actions workflow builds the Vite app and publishes its `dist/` folder to GitHub Pages after updates to `main`.
 
-## 🧪 Testing limitations
+## 🔐 Privacy & limitations
 
-The previous v3.1 project passed automated FFmpeg and localhost API tests on synthetic samples. Real-world camera footage and the final mobile WhatsApp handoff still require device-specific testing.
+The converter handles the input within browser memory. CDN requests fetch **code**, not your footage. No logging/analytics are intentionally built into the app. On phones, use smaller videos and verify output colours and sharpness before posting.
 
----
-
-*Independent project; not affiliated with WhatsApp or Meta.*
+**StoryForge WS is independent of WhatsApp and Meta.** Built by feeqazmir.
